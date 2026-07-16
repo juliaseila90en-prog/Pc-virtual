@@ -20,215 +20,59 @@ jobs:
       
     - name: System Information
       run: |
-        Write-Host "=== PC GAMER DO ENIGMANO ===" -ForegroundColor Green
-        Write-Host "Instância: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
+        Write-Host "=== PC ENIGMANO ===" -ForegroundColor Green
+        Write-Host "Instance: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
         
-    - name: Instalar DEPENDÊNCIAS para Roblox
+    - name: Enable RDP
       run: |
-        Write-Host "Instalando o necessário pro Roblox funcionar..." -ForegroundColor Green
-        
-        # DirectX (OBRIGATÓRIO)
-        Write-Host "Baixando DirectX..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://download.microsoft.com/download/1/7/1/1718CCC4-6315-4D8E-9543-8E28A4E18C4C/dxwebsetup.exe" -OutFile "$env:TEMP\dxsetup.exe"
-        Start-Process -FilePath "$env:TEMP\dxsetup.exe" -ArgumentList "/Q" -Wait
-        
-        # Visual C++ x64 (OBRIGATÓRIO)
-        Write-Host "Baixando VC++ x64..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "$env:TEMP\vc64.exe"
-        Start-Process -FilePath "$env:TEMP\vc64.exe" -ArgumentList "/quiet /norestart" -Wait
-        
-        # Visual C++ x86 (OBRIGATÓRIO)
-        Write-Host "Baixando VC++ x86..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x86.exe" -OutFile "$env:TEMP\vc86.exe"
-        Start-Process -FilePath "$env:TEMP\vc86.exe" -ArgumentList "/quiet /norestart" -Wait
-        
-        Write-Host "Tudo pronto! Roblox já pode ser instalado." -ForegroundColor Green
-        
-    - name: Habilitar RDP
-      run: |
-        Write-Host "Configurando Remote Desktop..." -ForegroundColor Green
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
         
-    - name: Criar Usuário
+    - name: Create User Account
       run: |
         $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
         Set-LocalUser -Name "runneradmin" -Password $Password
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
         
-    - name: Instalar Tailscale
+    - name: Install Tailscale
       run: |
-        Write-Host "Instalando Tailscale..." -ForegroundColor Green
         Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" -OutFile "$env:TEMP\tailscale.msi"
         Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tailscale.msi`" /quiet /norestart" -Wait
         
-    - name: Conectar Tailscale
+    - name: Start Tailscale
       run: |
         & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
         Start-Sleep -Seconds 15
         
-    - name: Pegar IP
+    - name: Get Tailscale IP
       run: |
         $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
         echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+        Write-Host "IP: $tsIP" -ForegroundColor Green
         
-    - name: Instalar Chrome (pra baixar Roblox)
+    - name: Install Google Chrome
       run: |
-        Write-Host "Instalando Chrome..." -ForegroundColor Green
         Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "$env:TEMP\chrome.exe"
         Start-Process -FilePath "$env:TEMP\chrome.exe" -ArgumentList "/silent /install" -Wait
 
-    - name: Instalar 7-Zip
+    - name: Install 7-Zip
       run: |
-        Write-Host "Instalando 7-Zip..." -ForegroundColor Green
         Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2409-x64.exe" -OutFile "$env:TEMP\7zip.exe"
         Start-Process -FilePath "$env:TEMP\7zip.exe" -ArgumentList "/S" -Wait
         
-    - name: Otimizar para Jogos
+    - name: Connection Details
       run: |
-        Write-Host "Aplicando tweaks de performance..." -ForegroundColor Green
-        powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2
-        Write-Host "PC otimizado!" -ForegroundColor Green
-        
-    - name: Dados de Conexão
-      run: |
-        Write-Host "`n================================================" -ForegroundColor Cyan
-        Write-Host "         PC PRONTO PRA VOCÊ INSTALAR!" -ForegroundColor Green
         Write-Host "================================================" -ForegroundColor Cyan
         Write-Host "IP: $env:TAILSCALE_IP" -ForegroundColor Yellow
-        Write-Host "Usuário: runneradmin" -ForegroundColor Yellow
+        Write-Host "Usuario: runneradmin" -ForegroundColor Yellow
         Write-Host "Senha: P@ssw0rd!" -ForegroundColor Yellow
-        Write-Host "`nComo instalar o Roblox:" -ForegroundColor Green
-        Write-Host "1. Conecte via Remote Desktop" -ForegroundColor White
-        Write-Host "2. Abra o Chrome" -ForegroundColor White
-        Write-Host "3. Vá em roblox.com e entre em algum jogo" -ForegroundColor White
-        Write-Host "4. O site vai pedir pra instalar - aceite" -ForegroundColor White
-        Write-Host "5. PRONTO! Roblox vai abrir!" -ForegroundColor Green
-        
-    - name: Manter PC Ligado
-      run: |
-        Write-Host "PC ONLINE - Pode conectar!" -ForegroundColor Green
-        Write-Host "Ambiente pronto pra Roblox (DirectX + VC++ instalados)" -ForegroundColor Cyan
-        $counter = 0
-        while ($true) {
-          $counter++
-          Write-Host "Online - $(Get-Date) - Loop #$counter" -ForegroundColor Green
-          Start-Sleep -Seconds 60
-        }name: PC criado pelo @alves7.pcm
-
-on:
-  workflow_dispatch:
-    inputs:
-      instance_number:
-        description: 'Instance Number (1-10)'
-        required: true
-        default: '1'
-        type: string
-
-jobs:
-  deploy-rdp:
-    runs-on: windows-latest
-    timeout-minutes: 360
-    
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      
-    - name: System Information
-      run: |
-        Write-Host "=== PC GAMER DO ENIGMANO ===" -ForegroundColor Green
-        Write-Host "Instância: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
-        
-    - name: Instalar DEPENDÊNCIAS para Roblox
-      run: |
-        Write-Host "Instalando o necessário pro Roblox funcionar..." -ForegroundColor Green
-        
-        # DirectX (OBRIGATÓRIO)
-        Write-Host "Baixando DirectX..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://download.microsoft.com/download/1/7/1/1718CCC4-6315-4D8E-9543-8E28A4E18C4C/dxwebsetup.exe" -OutFile "$env:TEMP\dxsetup.exe"
-        Start-Process -FilePath "$env:TEMP\dxsetup.exe" -ArgumentList "/Q" -Wait
-        
-        # Visual C++ x64 (OBRIGATÓRIO)
-        Write-Host "Baixando VC++ x64..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "$env:TEMP\vc64.exe"
-        Start-Process -FilePath "$env:TEMP\vc64.exe" -ArgumentList "/quiet /norestart" -Wait
-        
-        # Visual C++ x86 (OBRIGATÓRIO)
-        Write-Host "Baixando VC++ x86..." -ForegroundColor Yellow
-        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x86.exe" -OutFile "$env:TEMP\vc86.exe"
-        Start-Process -FilePath "$env:TEMP\vc86.exe" -ArgumentList "/quiet /norestart" -Wait
-        
-        Write-Host "Tudo pronto! Roblox já pode ser instalado." -ForegroundColor Green
-        
-    - name: Habilitar RDP
-      run: |
-        Write-Host "Configurando Remote Desktop..." -ForegroundColor Green
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-        
-    - name: Criar Usuário
-      run: |
-        $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
-        Set-LocalUser -Name "runneradmin" -Password $Password
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
-        
-    - name: Instalar Tailscale
-      run: |
-        Write-Host "Instalando Tailscale..." -ForegroundColor Green
-        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" -OutFile "$env:TEMP\tailscale.msi"
-        Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tailscale.msi`" /quiet /norestart" -Wait
-        
-    - name: Conectar Tailscale
-      run: |
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
-        Start-Sleep -Seconds 15
-        
-    - name: Pegar IP
-      run: |
-        $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-        echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-        
-    - name: Instalar Chrome (pra baixar Roblox)
-      run: |
-        Write-Host "Instalando Chrome..." -ForegroundColor Green
-        Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "$env:TEMP\chrome.exe"
-        Start-Process -FilePath "$env:TEMP\chrome.exe" -ArgumentList "/silent /install" -Wait
-
-    - name: Instalar 7-Zip
-      run: |
-        Write-Host "Instalando 7-Zip..." -ForegroundColor Green
-        Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2409-x64.exe" -OutFile "$env:TEMP\7zip.exe"
-        Start-Process -FilePath "$env:TEMP\7zip.exe" -ArgumentList "/S" -Wait
-        
-    - name: Otimizar para Jogos
-      run: |
-        Write-Host "Aplicando tweaks de performance..." -ForegroundColor Green
-        powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2
-        Write-Host "PC otimizado!" -ForegroundColor Green
-        
-    - name: Dados de Conexão
-      run: |
-        Write-Host "`n================================================" -ForegroundColor Cyan
-        Write-Host "         PC PRONTO PRA VOCÊ INSTALAR!" -ForegroundColor Green
         Write-Host "================================================" -ForegroundColor Cyan
-        Write-Host "IP: $env:TAILSCALE_IP" -ForegroundColor Yellow
-        Write-Host "Usuário: runneradmin" -ForegroundColor Yellow
-        Write-Host "Senha: P@ssw0rd!" -ForegroundColor Yellow
-        Write-Host "`nComo instalar o Roblox:" -ForegroundColor Green
-        Write-Host "1. Conecte via Remote Desktop" -ForegroundColor White
-        Write-Host "2. Abra o Chrome" -ForegroundColor White
-        Write-Host "3. Vá em roblox.com e entre em algum jogo" -ForegroundColor White
-        Write-Host "4. O site vai pedir pra instalar - aceite" -ForegroundColor White
-        Write-Host "5. PRONTO! Roblox vai abrir!" -ForegroundColor Green
+        Write-Host "Conecte via Remote Desktop e instale oq quiser" -ForegroundColor Green
         
-    - name: Manter PC Ligado
+    - name: Keep Session Alive
       run: |
-        Write-Host "PC ONLINE - Pode conectar!" -ForegroundColor Green
-        Write-Host "Ambiente pronto pra Roblox (DirectX + VC++ instalados)" -ForegroundColor Cyan
+        Write-Host "PC ONLINE" -ForegroundColor Green
         $counter = 0
         while ($true) {
           $counter++
