@@ -1,5 +1,4 @@
-
-name: PC criado pelo @Silvaz
+name: PC criado pelo @alves7.pcm
 
 on:
   workflow_dispatch:
@@ -22,200 +21,147 @@ jobs:
     - name: System Information
       run: |
         Write-Host "=== ENIGMANO RDP DEPLOYMENT ===" -ForegroundColor Green
-        Write-Host "Instance Number: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
-        Write-Host "Runner: $env:RUNNER_NAME" -ForegroundColor Yellow
+        Write-Host "Instance: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
         
-        Write-Host "`n=== SYSTEM SPECIFICATIONS ===" -ForegroundColor Cyan
-        Get-ComputerInfo | Select-Object WindowsProductName, WindowsVersion, TotalPhysicalMemory
-        Get-WmiObject -Class Win32_Processor | Select-Object Name, NumberOfCores, NumberOfLogicalProcessors
-        
-    - name: Install GPU Drivers and DirectX
+    - name: Install Dependencies for Roblox
       run: |
-        Write-Host "Installing Graphics Components..." -ForegroundColor Green
+        Write-Host "Instalando dependências necessárias..." -ForegroundColor Green
         
-        # Habilitar aceleração de GPU por software
-        Write-Host "Enabling GPU acceleration features..." -ForegroundColor Yellow
-        Enable-WindowsOptionalFeature -Online -FeatureName "Microsoft-Windows-Subsystem-Linux" -NoRestart -ErrorAction SilentlyContinue
-        
-        # Instalar DirectX Runtime (necessário para Roblox)
-        Write-Host "Downloading DirectX Runtime..." -ForegroundColor Green
+        # DirectX Web Installer
         $dxUrl = "https://download.microsoft.com/download/1/7/1/1718CCC4-6315-4D8E-9543-8E28A4E18C4C/dxwebsetup.exe"
-        $dxPath = "$env:TEMP\dxwebsetup.exe"
-        Invoke-WebRequest -Uri $dxUrl -OutFile $dxPath
-        Start-Process -FilePath $dxPath -ArgumentList "/Q" -Wait -NoNewWindow
-        Remove-Item $dxPath -Force
+        Invoke-WebRequest -Uri $dxUrl -OutFile "$env:TEMP\dxsetup.exe"
+        Start-Process -FilePath "$env:TEMP\dxsetup.exe" -ArgumentList "/Q" -Wait
         
-        # Instalar Visual C++ Redistributables (necessários para Roblox)
-        Write-Host "Installing Visual C++ Runtimes..." -ForegroundColor Green
-        $vcUrls = @(
-          "https://aka.ms/vs/17/release/vc_redist.x64.exe",
-          "https://aka.ms/vs/17/release/vc_redist.x86.exe"
-        )
-        foreach ($url in $vcUrls) {
-          $vcPath = "$env:TEMP\vc_redist.exe"
-          Invoke-WebRequest -Uri $url -OutFile $vcPath
-          Start-Process -FilePath $vcPath -ArgumentList "/quiet /norestart" -Wait -NoNewWindow
-          Remove-Item $vcPath -Force
-        }
+        # Visual C++ Redistributable (x64)
+        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x64.exe" -OutFile "$env:TEMP\vc64.exe"
+        Start-Process -FilePath "$env:TEMP\vc64.exe" -ArgumentList "/quiet /norestart" -Wait
         
-        Write-Host "Graphics components installed!" -ForegroundColor Green
+        # Visual C++ Redistributable (x86)
+        Invoke-WebRequest -Uri "https://aka.ms/vs/17/release/vc_redist.x86.exe" -OutFile "$env:TEMP\vc86.exe"
+        Start-Process -FilePath "$env:TEMP\vc86.exe" -ArgumentList "/quiet /norestart" -Wait
         
-    - name: Enable RDP with GPU Optimization
+        Write-Host "Dependências instaladas!" -ForegroundColor Green
+        
+    - name: Enable RDP
       run: |
-        Write-Host "Enabling Remote Desktop com otimização gráfica..." -ForegroundColor Green
+        Write-Host "Habilitando Remote Desktop..." -ForegroundColor Green
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
         Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
         Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
         
-        # Otimizações para performance gráfica no RDP
-        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "MaxOutstandingFrames" -Value 30
-        Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "MaxBufferingTime" -Value 1000
-        
-        # Habilitar RemoteFX e aceleração gráfica
-        Set-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\Terminal Services' -name "RemoteFX" -Value 1 -Force
-        
-        Write-Host "RDP otimizado para jogos!" -ForegroundColor Green
-        
     - name: Create User Account
       run: |
-        Write-Host "Setting up user account..." -ForegroundColor Green
+        Write-Host "Criando usuário..." -ForegroundColor Green
         $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
         Set-LocalUser -Name "runneradmin" -Password $Password
         Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
-        Write-Host "Username: runneradmin" -ForegroundColor Yellow
-        Write-Host "Password: P@ssw0rd!" -ForegroundColor Yellow
         
-    - name: Install Tailscale (Silent)
+    - name: Install Tailscale
       run: |
-        Write-Host "Downloading Tailscale..." -ForegroundColor Green
-        $tsUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi"
-        $installerPath = "$env:TEMP\tailscale.msi"
-        Invoke-WebRequest -Uri $tsUrl -OutFile $installerPath
-        Write-Host "Installing Tailscale silently..." -ForegroundColor Green
-        Start-Process msiexec.exe -ArgumentList "/i `"$installerPath`" /quiet /norestart" -Wait
-        Remove-Item $installerPath -Force
-        Write-Host "Tailscale installed successfully!" -ForegroundColor Green
+        Write-Host "Instalando Tailscale..." -ForegroundColor Green
+        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" -OutFile "$env:TEMP\tailscale.msi"
+        Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tailscale.msi`" /quiet /norestart" -Wait
         
     - name: Start Tailscale
       run: |
-        Write-Host "Starting Tailscale..." -ForegroundColor Green
+        Write-Host "Conectando Tailscale..." -ForegroundColor Green
         & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
         Start-Sleep -Seconds 15
         
     - name: Get Tailscale IP
       run: |
         $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-        Write-Host "Tailscale IP: $tsIP" -ForegroundColor Green
         echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
+        Write-Host "Tailscale IP: $tsIP" -ForegroundColor Green
         
     - name: Install Google Chrome
       run: |
-        Write-Host "Downloading Google Chrome..." -ForegroundColor Green
-        $chromeUrl = "https://dl.google.com/chrome/install/latest/chrome_installer.exe"
-        $installerPath = "$env:TEMP\chrome_installer.exe"
-        Invoke-WebRequest -Uri $chromeUrl -OutFile $installerPath
-        Start-Process -FilePath $installerPath -ArgumentList "/silent /install" -Wait
-        Remove-Item $installerPath -Force
+        Write-Host "Instalando Chrome..." -ForegroundColor Green
+        Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "$env:TEMP\chrome.exe"
+        Start-Process -FilePath "$env:TEMP\chrome.exe" -ArgumentList "/silent /install" -Wait
         
-    - name: Install Roblox
+    - name: DOWNLOAD ROBLOX (Método Direto)
       run: |
-        Write-Host "Installing Roblox..." -ForegroundColor Green
+        Write-Host "BAIXANDO ROBLOX..." -ForegroundColor Yellow
         
-        # Criar diretório para Roblox
-        $robloxPath = "C:\Roblox"
-        New-Item -ItemType Directory -Force -Path $robloxPath
+        # Método 1: Download direto do instalador
+        $robloxUrl = "https://setup.rbxcdn.com/RobloxPlayerLauncher.exe"
+        $robloxInstaller = "$env:TEMP\RobloxInstaller.exe"
         
-        # Baixar Roblox Player
-        Write-Host "Downloading Roblox installer..." -ForegroundColor Yellow
-        $robloxUrl = "https://www.roblox.com/download/client?os=win"
-        $installerPath = "$env:TEMP\RobloxPlayerLauncher.exe"
-        Invoke-WebRequest -Uri $robloxUrl -OutFile $installerPath -UseBasicParsing
-        
-        # Instalar Roblox silenciosamente
-        Write-Host "Installing Roblox..." -ForegroundColor Yellow
-        Start-Process -FilePath $installerPath -ArgumentList "/install /quiet /norestart" -Wait -NoNewWindow
-        
-        # Aguardar instalação
-        Start-Sleep -Seconds 10
-        
-        # Verificar se Roblox foi instalado
-        if (Test-Path "$env:LOCALAPPDATA\Roblox\Versions\*\RobloxPlayerBeta.exe") {
-          Write-Host "Roblox installed successfully!" -ForegroundColor Green
-        } else {
-          Write-Host "Roblox installation may have failed. Continuing anyway..." -ForegroundColor Yellow
+        try {
+          Invoke-WebRequest -Uri $robloxUrl -OutFile $robloxInstaller -ErrorAction Stop
+          Write-Host "Roblox baixado! (Tamanho: $((Get-Item $robloxInstaller).Length) bytes)" -ForegroundColor Green
+        } catch {
+          Write-Host "Erro no download: $_" -ForegroundColor Red
         }
         
-    - name: Graphics Performance Tuning
+    - name: INSTALL ROBLOX (Forçado)
       run: |
-        Write-Host "Optimizing system for gaming..." -ForegroundColor Green
+        Write-Host "INSTALANDO ROBLOX..." -ForegroundColor Yellow
         
-        # Otimizações de performance do Windows
-        powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c  # High Performance
+        $robloxInstaller = "$env:TEMP\RobloxInstaller.exe"
         
-        # Desabilitar efeitos visuais para melhor performance
-        Set-ItemProperty -Path "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\VisualEffects" -Name "VisualFXSetting" -Value 2
+        if (Test-Path $robloxInstaller) {
+          # Executar instalador
+          $process = Start-Process -FilePath $robloxInstaller -PassThru -Wait
+          
+          # Aguardar instalação
+          Start-Sleep -Seconds 30
+          
+          # Verificar se instalou
+          $robloxPath = "$env:LOCALAPPDATA\Roblox\Versions"
+          if (Test-Path $robloxPath) {
+            Write-Host "ROBLOX INSTALADO COM SUCESSO!" -ForegroundColor Green
+            Get-ChildItem $robloxPath
+          } else {
+            Write-Host "Roblox pode não ter instalado. Você precisará instalar manualmente." -ForegroundColor Yellow
+          }
+        }
         
-        # Configurar para máxima performance
-        Set-ItemProperty -Path "HKCU:\Control Panel\Desktop" -Name "UserPreferencesMask" -Value ([byte[]](0x90,0x12,0x03,0x80,0x10,0x00,0x00,0x00))
+    - name: CRIAR ATALHO ROBLOX NA ÁREA DE TRABALHO
+      run: |
+        Write-Host "Criando atalhos úteis..." -ForegroundColor Green
         
-        # Aumentar prioridade de processos de jogos
-        Write-Host "Performance optimizations applied!" -ForegroundColor Green
+        # Script para abrir Roblox
+        $script = @'
+Write-Host "Procurando Roblox..." -ForegroundColor Yellow
+$roblox = Get-ChildItem "$env:LOCALAPPDATA\Roblox\Versions\*\RobloxPlayerBeta.exe" -ErrorAction SilentlyContinue | Select-Object -First 1
+
+if ($roblox) {
+    Write-Host "Abrindo Roblox..." -ForegroundColor Green
+    Start-Process $roblox.FullName
+} else {
+    Write-Host "Roblox não instalado! Abra o Chrome e vá para roblox.com" -ForegroundColor Red
+    Start-Process "https://www.roblox.com/discover"
+}
+'@
+        $script | Out-File -FilePath "C:\Users\runneradmin\Desktop\Abrir_Roblox.ps1" -Encoding UTF8
+        
+        # Link direto pro site do Roblox
+        $WshShell = New-Object -ComObject WScript.Shell
+        $Shortcut = $WshShell.CreateShortcut("C:\Users\runneradmin\Desktop\Instalar_Roblox.url")
+        $Shortcut.TargetPath = "https://www.roblox.com/download/client?os=win"
+        $Shortcut.Save()
+        
+        Write-Host "Atalhos criados na área de trabalho!" -ForegroundColor Green
         
     - name: Connection Details
       run: |
-        Write-Host "`n=== CONNECTION DETAILS (TAILSCALE) ===" -ForegroundColor Green
-        Write-Host "╔══════════════════════════════════════╗" -ForegroundColor Cyan
-        Write-Host "║     ENIGMANO RDP + ROBLOX ACCESS      ║" -ForegroundColor Cyan  
-        Write-Host "╠══════════════════════════════════════╣" -ForegroundColor Cyan
-        Write-Host "║ Host: $env:TAILSCALE_IP              ║" -ForegroundColor White
-        Write-Host "║ Username: runneradmin                ║" -ForegroundColor White
-        Write-Host "║ Password: P@ssw0rd!                  ║" -ForegroundColor White
-        Write-Host "╚══════════════════════════════════════╝" -ForegroundColor Cyan
+        Write-Host "`n=== CONECTAR AO PC ===" -ForegroundColor Green
+        Write-Host "IP: $env:TAILSCALE_IP" -ForegroundColor Yellow
+        Write-Host "Usuário: runneradmin" -ForegroundColor Yellow
+        Write-Host "Senha: P@ssw0rd!" -ForegroundColor Yellow
+        Write-Host "`nApós conectar:" -ForegroundColor Cyan
+        Write-Host "1. Se Roblox não abrir, use o atalho 'Instalar_Roblox' na área de trabalho" -ForegroundColor White
+        Write-Host "2. Ou abra o Chrome e vá para roblox.com" -ForegroundColor White
+        Write-Host "3. Instale normalmente quando o site pedir" -ForegroundColor White
         
-        Write-Host "`nConnection Instructions:" -ForegroundColor Yellow
-        Write-Host "1. Connect using Remote Desktop with Tailscale IP" -ForegroundColor White
-        Write-Host "2. After connecting, launch Roblox from Start Menu" -ForegroundColor White
-        Write-Host "3. Performance will be limited (CPU rendering)" -ForegroundColor Yellow
-        Write-Host "4. Use minimum graphics settings in Roblox" -ForegroundColor Yellow
-        
-    - name: Keep Session Alive
+    - name: Keep Alive
       run: |
-        Write-Host "`n=== SESSION ACTIVE - ROBLOX READY ===" -ForegroundColor Green
-        Write-Host "EnigMano RDP instance with Roblox is running!" -ForegroundColor Cyan
-        Write-Host "Graphics: CPU Software Rendering (No dedicated GPU)" -ForegroundColor Yellow
-        Write-Host "Expected FPS: 15-30 (depending on game complexity)" -ForegroundColor Yellow
-        
+        Write-Host "PC ATIVO - Conecte via RDP!" -ForegroundColor Green
         $counter = 0
         while ($true) {
           $counter++
-          Write-Host "Session active - Heartbeat #$counter ($(Get-Date))" -ForegroundColor Green
-          
-          $tsStatus = & "C:\Program Files\Tailscale\tailscale.exe" status
-          if ($tsStatus -match "active") {
-            Write-Host "Tailscale: ACTIVE | Roblox: AVAILABLE" -ForegroundColor Green
-          } else {
-            Write-Host "Tailscale: ERROR - Restarting..." -ForegroundColor Red
-            & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
-          }
-          
-          Start-Sleep -Seconds 60
-        }        Write-Host "`n=== SESSION ACTIVE ===" -ForegroundColor Green
-        Write-Host "EnigMano RDP instance is now running!" -ForegroundColor Cyan
-        Write-Host "Instance will remain active for up to 6 hours." -ForegroundColor Yellow
-        Write-Host "Do not close this window to maintain the connection." -ForegroundColor Red
-        
-        $counter = 0
-        while ($true) {
-          $counter++
-          Write-Host "Session active - Heartbeat #$counter ($(Get-Date))" -ForegroundColor Green
-          
-          $tsStatus = & "C:\Program Files\Tailscale\tailscale.exe" status
-          if ($tsStatus -match "active") {
-            Write-Host "Tailscale status: ACTIVE" -ForegroundColor Green
-          } else {
-            Write-Host "Tailscale status: ERROR - Restarting..." -ForegroundColor Red
-            & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
-          }
-          
+          Write-Host "Online - $(Get-Date) - Heartbeat #$counter" -ForegroundColor Green
           Start-Sleep -Seconds 60
         }
