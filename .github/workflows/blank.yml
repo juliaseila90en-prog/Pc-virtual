@@ -1,81 +1,51 @@
-name: PC criado pelo @alves7.pcm
+name: Windows Cloud PC - Anydesk (Optimized)
 
 on:
   workflow_dispatch:
-    inputs:
-      instance_number:
-        description: 'Instance Number (1-10)'
-        required: true
-        default: '1'
-        type: string
 
 jobs:
-  deploy-rdp:
+  build:
+    name: Start Building...
     runs-on: windows-latest
-    timeout-minutes: 360
-    
-    steps:
-    - name: Checkout Repository
-      uses: actions/checkout@v4
-      
-    - name: System Information
-      run: |
-        Write-Host "=== PC ENIGMANO ===" -ForegroundColor Green
-        Write-Host "Instance: ${{ github.event.inputs.instance_number }}" -ForegroundColor Yellow
-        
-    - name: Enable RDP
-      run: |
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -name "fDenyTSConnections" -Value 0
-        Enable-NetFirewallRule -DisplayGroup "Remote Desktop"
-        Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -name "UserAuthentication" -Value 1
-        
-    - name: Create User Account
-      run: |
-        $Password = ConvertTo-SecureString "P@ssw0rd!" -AsPlainText -Force
-        Set-LocalUser -Name "runneradmin" -Password $Password
-        Add-LocalGroupMember -Group "Remote Desktop Users" -Member "runneradmin"
-        
-    - name: Install Tailscale
-      run: |
-        Invoke-WebRequest -Uri "https://pkgs.tailscale.com/stable/tailscale-setup-1.82.0-amd64.msi" -OutFile "$env:TEMP\tailscale.msi"
-        Start-Process msiexec.exe -ArgumentList "/i `"$env:TEMP\tailscale.msi`" /quiet /norestart" -Wait
-        
-    - name: Start Tailscale
-      run: |
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
-        Start-Sleep -Seconds 15
-        
-    - name: Get Tailscale IP
-      run: |
-        $tsIP = & "C:\Program Files\Tailscale\tailscale.exe" ip -4
-        echo "TAILSCALE_IP=$tsIP" >> $env:GITHUB_ENV
-        Write-Host "IP: $tsIP" -ForegroundColor Green
-        
-    - name: Install Google Chrome
-      run: |
-        Invoke-WebRequest -Uri "https://dl.google.com/chrome/install/latest/chrome_installer.exe" -OutFile "$env:TEMP\chrome.exe"
-        Start-Process -FilePath "$env:TEMP\chrome.exe" -ArgumentList "/silent /install" -Wait
+    timeout-minutes: 10080  # MÃ¡ximo de 7 dias para evitar tempo de execuÃ§Ã£o excessivo
 
-    - name: Install 7-Zip
-      run: |
-        Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2409-x64.exe" -OutFile "$env:TEMP\7zip.exe"
-        Start-Process -FilePath "$env:TEMP\7zip.exe" -ArgumentList "/S" -Wait
-        
-    - name: Connection Details
-      run: |
-        Write-Host "================================================" -ForegroundColor Cyan
-        Write-Host "IP: $env:TAILSCALE_IP" -ForegroundColor Yellow
-        Write-Host "Usuario: runneradmin" -ForegroundColor Yellow
-        Write-Host "Senha: P@ssw0rd!" -ForegroundColor Yellow
-        Write-Host "================================================" -ForegroundColor Cyan
-        Write-Host "Conecte via Remote Desktop e instale oq quiser" -ForegroundColor Green
-        
-    - name: Keep Session Alive
-      run: |
-        Write-Host "PC ONLINE" -ForegroundColor Green
-        $counter = 0
-        while ($true) {
-          $counter++
-          Write-Host "Online - $(Get-Date) - Loop #$counter" -ForegroundColor Green
-          Start-Sleep -Seconds 60
-        }
+    steps:
+      - name: Downloading & Installing Essentials
+        run: |
+          # Baixa o arquivo .bat para instalar componentes essenciais
+          Invoke-WebRequest -Uri "https://www.dropbox.com/scl/fi/7eiczvgil84czu55dxep3/Downloads.bat?rlkey=wzdc1wxjsph2b7r0atplmdz3p&dl=1" -OutFile "Downloads.bat"
+          # Executa o script .bat para instalar os componentes
+          cmd /c Downloads.bat
+
+      - name: Log In To AnyDesk
+        run: |
+          # Verifica se o arquivo start.bat existe antes de executar
+          if (Test-Path "start.bat") {
+            cmd /c start.bat
+          } else {
+            Write-Host "Arquivo start.bat nÃ£o encontrado. Verifique a configuraÃ§Ã£o."
+          }
+
+      - name: Monitor and Restart AnyDesk if Needed
+        run: |
+          # Monitora a conexÃ£o do AnyDesk e reinicia se necessÃ¡rio
+          while ($true) {
+            $process = Get-Process -Name "AnyDesk" -ErrorAction SilentlyContinue
+            if (-not $process) {
+              Write-Host "AnyDesk nÃ£o estÃ¡ rodando, reiniciando..."
+              cmd /c start.bat
+            }
+            Start-Sleep -Seconds 300  # Verifica a cada 5 minutos
+          }
+
+      - name: Time Counter (Long Running Task)
+        run: |
+          # Configura para manter a mÃ¡quina em execuÃ§Ã£o
+          Start-Sleep -Seconds 604800  # 7 dias de execuÃ§Ã£o contÃ­nua
+
+      - name: Clean Up Temporary Files
+        if: success()  # Executa esta etapa apenas se todas as etapas anteriores forem bem-sucedidas
+        run: |
+          # Remove arquivos temporÃ¡rios ou logs gerados
+          Remove-Item Downloads.bat -Force
+          Write-Host "Limpeza completa."
