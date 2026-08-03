@@ -59,7 +59,7 @@ jobs:
     - name: Start Tailscale
       run: |
         Write-Host "Starting Tailscale..." -ForegroundColor Green
-        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.TAILSCALE_AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
+        & "C:\Program Files\Tailscale\tailscale.exe" up --authkey ${{ secrets.AUTH_KEY }} --hostname "enigmano-${{ github.run_id }}"
         Start-Sleep -Seconds 15
         
     - name: Get Tailscale IP
